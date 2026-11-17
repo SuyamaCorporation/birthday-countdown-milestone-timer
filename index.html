@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>誕生日カウントダウン&マイルストーンタイマー</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @keyframes pulse-bg {
+    0%,100%{background-color:#1e1b4b}
+    50%{background-color:#312e81}
+  }
+  .urgent-bg { animation: pulse-bg 1.5s ease-in-out infinite; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
+  /* Confetti */
+  .confetti-piece {
+    position:fixed;
+    width:10px; height:10px;
+    animation: confetti-fall linear forwards;
+    border-radius:2px;
+  }
+  @keyframes confetti-fall {
+    0%{transform:translateY(-10px) rotate(0deg);opacity:1}
+    100%{transform:translateY(100vh) rotate(720deg);opacity:0}
+  }
+  /* Fullscreen */
+  #fullscreen-overlay {
+    display:none;
+    position:fixed;inset:0;
+    background:#0f172a;
+    z-index:50;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+  }
+  #fullscreen-overlay.active { display:flex; }
+</style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen flex flex-col">
+
+<header class="bg-gray-900 shadow px-4 py-3 flex items-center justify-between">
+  <h1 class="text-lg font-bold">🎂 カウントダウンタイマー</h1>
+  <button onclick="showAddForm()" class="px-4 py-2 bg-pink-600 hover:bg-pink-500 rounded-lg text-sm font-semibold transition" aria-label="イベントを追加">＋ 追加</button>
+</header>
+
+<!-- Add event modal -->
+<div id="add-modal" class="hidden fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4">
+  <div class="bg-gray-900 rounded-2xl p-6 w-full max-w-md shadow-2xl fade-in">
+    <h2 class="text-xl font-bold mb-4">イベントを追加</h2>
+    <div class="flex flex-col gap-3">
+      <div>
+        <label class="text-xs text-gray-400 mb-1 block" for="ev-name">イベント名</label>
+        <input id="ev-name" type="text" placeholder="例: 山田さんの誕生日" maxlength="40"
+          class="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:border-pink-400"
+          aria-label="イベント名入力" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 mb-1 block" for="ev-date">日付</label>
+        <input id="ev-date" type="date"
+          class="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:border-pink-400"
+          aria-label="日付入力" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 mb-1 block" for="ev-note">メモ（任意）</label>
+        <input id="ev-note" type="text" placeholder="任意のメモ" maxlength="80"
+          class="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:border-pink-400"
+          aria-label="メモ入力" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 mb-1 block">絵文字アイコン</label>
+        <div id="emoji-picker" class="flex flex-wrap gap-2">
+        </div>
+        <input id="ev-emoji" type="hidden" value="🎂" />
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="addEvent()" class="flex-1 bg-pink-600 hover:bg-pink-500 rounded-lg py-2 font-bold transition" aria-label="イベントを保存">保存</button>
+      <button onclick="closeModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 rounded-lg py-2 font-bold transition" aria-label="キャンセル">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fullscreen overlay -->
+<div id="fullscreen-overlay" role="dialog" aria-label="全画面カウントダウン">
+  <button onclick="exitFullscreen()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm" aria-label="全画面を閉じる">✕ 閉じる (ESC)</button>
+  <div id="fs-emoji" class="text-8xl mb-4"></div>
+  <div id="fs-name" class="text-3xl font-bold mb-2"></div>
+  <div id="fs-date" class="text-gray-400 text-sm mb-8"></div>
+  <div class="flex gap-6">
+    <div class="text-center"><div id="fs-days" class="text-7xl font-black text-pink-400">0</div><div class="text-xs text-gray-400 mt-1">日</div></div>
+    <div class="text-center"><div id="fs-hours" class="text-7xl font-black text-purple-400">0</div><div class="text-xs text-gray-400 mt-1">時間</div></div>
+    <div class="text-center"><div id="fs-mins" class="text-7xl font-black text-blue-400">0</div><div class="text-xs text-gray-400 mt-1">分</div></div>
+    <div class="text-center"><div id="fs-secs" class="text-7xl font-black text-teal-400">0</div><div class="text-xs text-gray-400 mt-1">秒</div></div>
+  </div>
+</div>
+
+<main class="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
+  <div id="events-list" class="flex flex-col gap-4"></div>
+  <div id="empty-state" class="text-center text-gray-500 py-16 hidden">
+    <div class="text-5xl mb-4">🎉</div>
+    <div>イベントがありません。<br/>「＋ 追加」ボタンでイベントを登録しましょう！</div>
+  </div>
+</main>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+const EMOJIS=['🎂','🎉','🎊','🥳','💝','🌸','🎁','🏆','🌟','🎵','🌈','🎆','🎇','🍰','🥂'];
+let events=[];
+let selectedEmoji='🎂';
+let fsEventId=null;
+
+function loadEvents(){events=JSON.parse(localStorage.getItem('countdown_events')||'[]');}
+function saveEvents(){localStorage.setItem('countdown_events',JSON.stringify(events));}
+
+function showAddForm(){
+  document.getElementById('ev-name').value='';
+  document.getElementById('ev-date').value='';
+  document.getElementById('ev-note').value='';
+  selectedEmoji='🎂';
+  buildEmojiPicker();
+  document.getElementById('add-modal').classList.remove('hidden');
+  document.getElementById('ev-name').focus();
+}
+function closeModal(){document.getElementById('add-modal').classList.add('hidden');}
+
+function buildEmojiPicker(){
+  const picker=document.getElementById('emoji-picker');
+  picker.innerHTML='';
+  EMOJIS.forEach(e=>{
+    const btn=document.createElement('button');
+    btn.textContent=e;
+    btn.setAttribute('aria-label','絵文字: '+e);
+    btn.className='text-2xl p-1 rounded transition '+(e===selectedEmoji?'bg-pink-700 ring-2 ring-pink-400':'bg-gray-800 hover:bg-gray-700');
+    btn.onclick=()=>{selectedEmoji=e;document.getElementById('ev-emoji').value=e;buildEmojiPicker();};
+    picker.appendChild(btn);
+  });
+}
+
+function addEvent(){
+  const name=document.getElementById('ev-name').value.trim();
+  const date=document.getElementById('ev-date').value;
+  const note=document.getElementById('ev-note').value.trim();
+  if(!name||!date){alert('イベント名と日付を入力してください。');return;}
+  const ev={id:Date.now(),name,date,note,emoji:selectedEmoji};
+  events.push(ev);
+  saveEvents();
+  closeModal();
+  renderEvents();
+}
+
+function deleteEvent(id){
+  if(!confirm('このイベントを削除しますか？'))return;
+  events=events.filter(e=>e.id!==id);
+  saveEvents();
+  renderEvents();
+}
+
+function getCountdown(dateStr){
+  const target=new Date(dateStr+'T00:00:00');
+  const now=new Date();
+  const diff=target-now;
+  if(diff<0){
+    // past — calc years ago
+    const yearsAgo=now.getFullYear()-target.getFullYear();
+    return {past:true, yearsAgo};
+  }
+  const totalSec=Math.floor(diff/1000);
+  const days=Math.floor(totalSec/86400);
+  const hours=Math.floor((totalSec%86400)/3600);
+  const mins=Math.floor((totalSec%3600)/60);
+  const secs=totalSec%60;
+  return {past:false,days,hours,mins,secs,totalSec};
+}
+
+function renderEvents(){
+  const list=document.getElementById('events-list');
+  const empty=document.getElementById('empty-state');
+  list.innerHTML='';
+  if(events.length===0){empty.classList.remove('hidden');return;}
+  empty.classList.add('hidden');
+
+  // Sort: future first by date, then past
+  const now=new Date();
+  const future=events.filter(e=>new Date(e.date+'T00:00:00')>=now).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const past=events.filter(e=>new Date(e.date+'T00:00:00')<now).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  [...future,...past].forEach(ev=>{
+    const cd=getCountdown(ev.date);
+    const urgent=!cd.past&&cd.days<10;
+    const card=document.createElement('div');
+    card.className='fade-in rounded-2xl p-5 shadow-xl '+(cd.past?'bg-gray-800':'bg-gray-900 border border-gray-700')+(urgent?' urgent-bg border-pink-800':'');
+    card.setAttribute('data-id',ev.id);
+    if(!cd.past&&cd.totalSec<=0){
+      // celebration
+      launchConfetti();
+    }
+    let content='';
+    if(cd.past){
+      content=`<div class="text-3xl font-bold text-gray-400">${cd.yearsAgo}年前</div>`;
+    } else if(cd.totalSec===0){
+      content=`<div class="text-3xl font-bold text-pink-400 animate-bounce">🎉 今日です！</div>`;
+    } else {
+      content=`<div class="flex gap-4 items-end">
+        <div class="text-center"><div class="text-4xl font-black text-pink-400" id="cd-${ev.id}-d">${cd.days}</div><div class="text-xs text-gray-400">日</div></div>
+        <div class="text-center"><div class="text-3xl font-bold text-purple-400" id="cd-${ev.id}-h">${String(cd.hours).padStart(2,'0')}</div><div class="text-xs text-gray-400">時間</div></div>
+        <div class="text-center"><div class="text-3xl font-bold text-blue-400" id="cd-${ev.id}-m">${String(cd.mins).padStart(2,'0')}</div><div class="text-xs text-gray-400">分</div></div>
+        <div class="text-center"><div class="text-3xl font-bold text-teal-400" id="cd-${ev.id}-s">${String(cd.secs).padStart(2,'0')}</div><div class="text-xs text-gray-400">秒</div></div>
+      </div>`;
+    }
+    card.innerHTML=`
+      <div class="flex justify-between items-start mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-3xl">${ev.emoji /* xss-ok: EMOJISハードコード配列から選択した絵文字 */}</span>
+          <div>
+            <div class="font-bold text-lg">${esc(ev.name)}</div>
+            <div class="text-xs text-gray-400">${esc(ev.date)}${ev.note?'・'+esc(ev.note):''}</div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          ${!cd.past?`<button onclick="openFullscreen(${ev.id /* xss-ok: Date.now()生成の整数ID */})" class="text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition" aria-label="全画面表示">全画面</button>`:''}
+          <button onclick="deleteEvent(${ev.id /* xss-ok: Date.now()生成の整数ID */})" class="text-xs text-red-400 hover:text-red-300 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition" aria-label="イベントを削除">削除</button>
+        </div>
+      </div>
+      ${content /* xss-ok: 整数の算術結果とString.padStart()から構築された内部文字列 */}
+      ${urgent&&!cd.past?'<div class="mt-2 text-xs text-pink-300 font-semibold animate-pulse">🔥 10日を切りました！</div>':''}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function tickAll(){
+  events.forEach(ev=>{
+    const cd=getCountdown(ev.date);
+    if(!cd.past&&cd.totalSec>0){
+      const d=document.getElementById('cd-'+ev.id+'-d');
+      const h=document.getElementById('cd-'+ev.id+'-h');
+      const m=document.getElementById('cd-'+ev.id+'-m');
+      const s=document.getElementById('cd-'+ev.id+'-s');
+      if(d){d.textContent=cd.days;}
+      if(h){h.textContent=String(cd.hours).padStart(2,'0');}
+      if(m){m.textContent=String(cd.mins).padStart(2,'0');}
+      if(s){s.textContent=String(cd.secs).padStart(2,'0');}
+    }
+    // fullscreen update
+    if(fsEventId===ev.id&&!cd.past){
+      document.getElementById('fs-days').textContent=cd.days;
+      document.getElementById('fs-hours').textContent=String(cd.hours).padStart(2,'0');
+      document.getElementById('fs-mins').textContent=String(cd.mins).padStart(2,'0');
+      document.getElementById('fs-secs').textContent=String(cd.secs).padStart(2,'0');
+    }
+  });
+}
+
+function openFullscreen(id){
+  const ev=events.find(e=>e.id===id);
+  if(!ev)return;
+  fsEventId=id;
+  document.getElementById('fs-emoji').textContent=ev.emoji;
+  document.getElementById('fs-name').textContent=ev.name;
+  document.getElementById('fs-date').textContent=ev.date+(ev.note?'・'+ev.note:'');
+  document.getElementById('fullscreen-overlay').classList.add('active');
+}
+function exitFullscreen(){
+  fsEventId=null;
+  document.getElementById('fullscreen-overlay').classList.remove('active');
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')exitFullscreen();});
+
+function launchConfetti(){
+  const colors=['#f472b6','#a78bfa','#60a5fa','#34d399','#fbbf24','#fb7185'];
+  for(let i=0;i<60;i++){
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    el.style.cssText=`left:${Math.random()*100}vw;top:-10px;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*0.5}s;width:${6+Math.random()*8}px;height:${6+Math.random()*8}px;`;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(),3500);
+  }
+}
+
+// Close modal on backdrop click
+document.getElementById('add-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+loadEvents();
+renderEvents();
+setInterval(tickAll,1000);
+// Re-render every minute to handle transitions
+setInterval(renderEvents,60000);
+</script>
+</body>
+</html>
